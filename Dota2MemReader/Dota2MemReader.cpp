@@ -5,6 +5,7 @@
 #include <string>
 
 using std::cout;
+using std::cin;
 using std::endl;
 
 //Write value of vbe status to text.
@@ -34,8 +35,8 @@ std::vector<unsigned int> getOffsetFromText() {
 
     std::fstream file;
     std::string word;
-    std::vector<std::string> offsets(8);
-    std::vector<unsigned int> offsetsInt(8);
+    std::vector<std::string> offsets;
+    std::vector<unsigned int> offsetsInt;
 
     //Open text file
     file.open("offs.conf", std::ios::out | std::ios::in);
@@ -48,7 +49,7 @@ std::vector<unsigned int> getOffsetFromText() {
     {
         if (i >= 8) break;
 
-        offsets[i] = word;
+        offsets.push_back(word);
         i++;
     }
     for (size_t i = 0; i < offsets.size(); i++)
@@ -56,7 +57,7 @@ std::vector<unsigned int> getOffsetFromText() {
         std::istringstream buffer(offsets[i]);
         unsigned long long value;
         buffer >> std::hex >> value;
-        offsetsInt[i] = value;
+        offsetsInt.push_back(value);
     }
     return offsetsInt;
 }
@@ -79,13 +80,13 @@ int main()
 
         //Getmodulebaseaddress
         uintptr_t moduleBase = GetModuleBaseAddress(procId, L"engine2.dll");
-        std::cout << std::hex << "Module Base Address: 0x" << moduleBase << std::endl;
+        //std::cout << std::hex << "Module Base Address: 0x" << moduleBase << std::endl;
 
         hProcess = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, NULL, procId);
 
         if (!hProcess == 0)
         {
-            cout << "Handle successfully attached." << endl;
+            cout << "Handle successfully attached..." << endl;
             //Load offsets from file
             std::vector<unsigned int> offsets = getOffsetFromText();
 
@@ -93,13 +94,15 @@ int main()
             uintptr_t dynamicPtrBaseAddr = moduleBase + offsets[0];
 
             //Resolve our pointer chain
-            std::vector<unsigned int> vbE = { offsets[1] ,offsets[2] ,offsets[3] ,offsets[4] ,offsets[5] ,offsets[6] ,offsets[7] };
-            uintptr_t vbEAddr = GetDMAAddy(hProcess, dynamicPtrBaseAddr, vbE);
-
-            //std::cout << "Visible by Enemy Address  = " << "0x" << std::hex << vbEAddr << std::endl << std::endl;
-
+            uintptr_t vbEAddr = FindDMAAddy(hProcess, dynamicPtrBaseAddr, offsets);
+            cout << "Waiting ingame activation..." << endl;
+            while(vbEAddr == 0)
+            {
+                vbEAddr = FindDMAAddy(hProcess, dynamicPtrBaseAddr, offsets);
+            }
+            
             bool visible = false;
-            cout << "Overlay success" << endl;
+            cout << endl << "Overlay success..." << endl;
             writeFile(visible);
             while (true) // Loop = 50ms update
             {
@@ -114,7 +117,7 @@ int main()
                 ReadProcessMemory(hProcess, (BYTE*)vbEAddr, &vbEVal, sizeof(vbEVal), nullptr);
 
                 //Test Value
-                if (vbEVal == 14) // Visible by enemy
+                if (vbEVal == 30) // Visible by enemy
                 {
                     if (visible==false)
                     {
@@ -124,7 +127,7 @@ int main()
                     }
 
                 }
-                else if (vbEVal >= 6 && vbEVal <= 10) // Not visible by enemy
+                else if (vbEVal >= 22 && vbEVal <= 26) // Not visible by enemy
                 {
                     if (visible == true)
                     {
@@ -136,7 +139,7 @@ int main()
                 }
                 else // Address not found or value not initiazized ingame
                 {
-                    cout << "Address not found , Try to update offset." << endl;
+                    cout << "Address not found." << endl;
                     break;
 
                 }
@@ -149,13 +152,13 @@ int main()
         }
         else
         {
-            cout << "Failed to attach process.";
+            cout << "Failed to attach process. Try running with administrative previlages";
 
         }
     }
     else 
     {
-        cout << "Process not found." << endl;
+        cout << "Process not found..." << endl;
 
     }
     exitOverlay();
